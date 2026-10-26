@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-dev.txt
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Check source and formatting
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
+          npm run check
+          git diff --check
+          python deploy/check_repository.py
+      - name: Test API and audio transformations
+        run: .venv/bin/python -m pytest -v --cov=slaymusic --cov=app_final --cov-fail-under=90 --cov-report=term-missing
+      - name: Test browser workflows
+        run: npm run test:e2e
+      - name: Package application
+        run: git archive --format=tar.gz --output=slaymusic.tar.gz HEAD app_final.py slaymusic static requirements.txt requirements-dev.txt requirements.in requirements-dev.in pyproject.toml test_app.py tests package.json package-lock.json playwright.config.js deploy README.md .env.example
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: slaymusic-${{ github.sha }}
+          path: slaymusic.tar.gz
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload browser failure report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
