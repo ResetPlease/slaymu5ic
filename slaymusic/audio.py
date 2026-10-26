@@ -311,7 +311,7 @@ async def process_audio(audio: Audio, options: Options, settings: Settings):
         graph = (
             f"[0:a]{','.join(chain) or 'anull'},aresample={RATE},apad=pad_dur={tail},asplit=2[dry][send];"
             f"aevalsrc='{'|'.join(impulses)}':s={RATE}:d={tail},atrim=duration={tail}[ir];"
-            f"[send][ir]afir=dry=1:wet=1:maxir=2:precision=float,volume={impulse_gain}[wet];"
+            f"[send][ir]afir=dry=1:wet=1:maxir=2:precision=float:minp=256:maxp=8192,volume={impulse_gain}[wet];"
             f"[dry][wet]amix=inputs=2:weights='{1 - options.reverb} {options.reverb}':"
             "normalize=0:duration=first[out]"
         )
