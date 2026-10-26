@@ -247,3 +247,73 @@ def test_unsupported_bitrate_rejected_before_processing(upload, format, rate, ch
         upload(format=format, sample_rate=rate, channels=channels, bitrate=bitrate).status_code
         == 422
     )
+
+
+def test_cancellation_terminates_ffmpeg_process(tone, monkeypatch):
+    async def scenario():
+        original = asyncio.create_subprocess_exec
+        processes = []
+        started = asyncio.Event()
+
+        async def tracked(*args, **kwargs):
+            process = await original(*args, **kwargs)
+            processes.append(process)
+            started.set()
+            return process
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", tracked)
+        task = asyncio.create_task(
+            run_ffmpeg(tone, ["-re", "-i", "pipe:0", "-f", "s16le"], Settings(), 1000000)
+        )
+        await started.wait()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        assert processes[0].returncode is not None
+
+    asyncio.run(scenario())
+
+
+def test_large_declared_wav_size_does_not_allocate_declared_memory(upload):
+    payload = bytearray(make_wav(duration=0.01))
+    payload[4:8] = b"\xff\xff\xff\x7f"
+    payload[40:44] = b"\xff\xff\xff\x7f"
+    response = upload("/api/audio/info", data=bytes(payload))
+    assert response.status_code in (200, 422)
+    if response.status_code == 200:
+        assert response.json()["duration"] < 0.02
+
+
+@pytest.mark.parametrize("room,tail", [("room", 0.65), ("hall", 1.6)])
+def test_reverb_has_a_decaying_stereo_tail_without_files(upload, room, tail):
+    buffer = io.BytesIO()
+    source = np.zeros((44100, 2), dtype="<i2")
+    source[4410] = 8000
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(44100)
+        wav.writeframes(source.tobytes())
+    response = upload(data=buffer.getvalue(), reverb=0.5, reverb_room=room)
+    assert response.status_code == 200
+    rate, samples = read_wav(response.content)
+    assert len(samples) / rate == pytest.approx(1 + tail, abs=0.03)
+    early = samples[round(rate * 0.13) : round(rate * 0.23)].astype(float)
+    late = samples[round(rate * (0.1 + tail * 0.8)) : round(rate * (0.1 + tail))].astype(float)
+    assert np.sqrt(np.mean(early**2)) > 10
+    assert np.sqrt(np.mean(late**2)) < np.sqrt(np.mean(early**2)) * 0.2
+    assert not np.array_equal(early[:, 0], early[:, 1])
+
+
+@pytest.mark.parametrize("effect", ["distortion", "tremolo"])
+def test_new_character_effects_modify_signal(upload, tone, effect):
+    response = upload(effect=effect)
+    assert response.status_code == 200
+    rate, samples = read_wav(response.content)
+    _, original = read_wav(tone)
+    assert len(samples) / rate == pytest.approx(2, abs=0.01)
+    assert np.mean(np.abs(samples.astype(float) - original)) > 100
+
+
+@pytest.mark.parametrize("params", [{"reverb": -1}, {"reverb": 1}, {"reverb_room": "unknown"}])
+def test_reverb_limits_are_validated(upload, params):
+    assert upload(**params).status_code == 422

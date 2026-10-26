@@ -1,8 +1,10 @@
 import asyncio
+import io
 import logging
 import time
 
 from fastapi import HTTPException, Request
+from starlette.requests import ClientDisconnect
 from starlette.responses import JSONResponse
 
 from slaymusic.config import Settings
@@ -77,17 +79,21 @@ async def read_audio(request: Request, settings: Settings):
             size = int(length)
         except ValueError as exc:
             raise HTTPException(400, "Некорректный Content-Length.") from exc
+        if size < 0:
+            raise HTTPException(400, "Некорректный Content-Length.")
         if size > limit:
             raise HTTPException(413, f"Размер файла превышает {settings.max_upload_mb} МБ.")
-    data = bytearray()
+    data = io.BytesIO()
     try:
         async with asyncio.timeout(settings.process_timeout_seconds):
             async for chunk in request.stream():
-                if len(data) + len(chunk) > limit:
+                if data.tell() + len(chunk) > limit:
                     raise HTTPException(413, f"Размер файла превышает {settings.max_upload_mb} МБ.")
-                data.extend(chunk)
+                data.write(chunk)
+    except ClientDisconnect as exc:
+        raise HTTPException(400, "Загрузка прервана.") from exc
     except TimeoutError as exc:
         raise HTTPException(408, "Загрузка заняла слишком много времени.") from exc
-    if not data:
+    if not data.tell():
         raise HTTPException(422, "Выберите непустой аудиофайл.")
-    return bytes(data)
+    return data.getvalue()

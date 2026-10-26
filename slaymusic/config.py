@@ -9,7 +9,8 @@ class Settings:
     max_upload_mb: int = 30
     max_duration_seconds: int = 300
     process_timeout_seconds: float = 60
-    max_concurrent_jobs: int = 2
+    max_concurrent_jobs: int = 1
+    ffmpeg_memory_mb: int = 768
     log_level: str = "INFO"
     ffmpeg_binary: str = "ffmpeg"
 
@@ -21,7 +22,8 @@ class Settings:
             max_upload_mb=int(os.getenv("MAX_UPLOAD_MB", "30")),
             max_duration_seconds=int(os.getenv("MAX_DURATION_SECONDS", "300")),
             process_timeout_seconds=float(os.getenv("PROCESS_TIMEOUT_SECONDS", "60")),
-            max_concurrent_jobs=int(os.getenv("MAX_CONCURRENT_JOBS", "2")),
+            max_concurrent_jobs=int(os.getenv("MAX_CONCURRENT_JOBS", "1")),
+            ffmpeg_memory_mb=int(os.getenv("FFMPEG_MEMORY_MB", "768")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             ffmpeg_binary=os.getenv("FFMPEG_BINARY", "ffmpeg"),
         )
@@ -39,6 +41,7 @@ class Settings:
                 settings.max_duration_seconds,
                 settings.process_timeout_seconds,
                 settings.max_concurrent_jobs,
+                settings.ffmpeg_memory_mb,
             )
             <= 0
         ):

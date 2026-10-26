@@ -1,11 +1,14 @@
-"use strict";
+import { StudioPlayer } from "./player.js";
 
 const $ = (id) => document.getElementById(id);
-const audio = new Audio();
+const audio = new StudioPlayer();
 const state = {
   file: null,
   info: null,
   originalURL: null,
+  originalBuffer: null,
+  resultBuffer: null,
+  renderedOptions: null,
   resultURL: null,
   source: "original",
   busy: false,
@@ -24,11 +27,19 @@ const numericFields = [
   "fade_out",
   "bass",
   "treble",
+  "reverb",
   "sample_rate",
   "channels",
   "bitrate",
 ];
-const effectFields = ["bass", "treble", "effect", "normalize"];
+const effectFields = [
+  "bass",
+  "treble",
+  "effect",
+  "normalize",
+  "reverb",
+  "reverb_room",
+];
 const defaults = {
   start: 0,
   speed: 1,
@@ -39,6 +50,8 @@ const defaults = {
   bass: 0,
   treble: 0,
   effect: "none",
+  reverb: 0,
+  reverb_room: "hall",
   mode: "keep",
   reverse: false,
   normalize: false,
@@ -78,6 +91,8 @@ function syncDisabled() {
     "reset-button",
     "play-button",
     "original-button",
+    "seek",
+    "restart-button",
   ])
     $(id).disabled = unavailable;
   $("result-button").disabled = unavailable || !state.resultURL;
@@ -85,15 +100,20 @@ function syncDisabled() {
   $("file-input").disabled = state.busy;
   $("bitrate").disabled = ["wav", "flac"].includes($("format").value);
   document.body.classList.toggle("busy", state.busy);
-  $("track-status").textContent = state.busy
-    ? "ОБРАБОТКА"
-    : state.file
-      ? "ГОТОВ К РАБОТЕ"
-      : "НЕТ АУДИО";
   $("preview-button").setAttribute("aria-busy", String(state.busy));
 }
 
+function paintRange(input) {
+  input.style.setProperty(
+    "--fill",
+    `${((Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min))) * 100}%`,
+  );
+}
+
 function updateControls() {
+  document.querySelectorAll('input[type="range"]').forEach(paintRange);
+  $("reverb-value").textContent =
+    `${Math.round(Number($("reverb").value) * 100)}%`;
   $("speed-value").textContent = `${Number($("speed").value).toFixed(2)}×`;
   $("pitch-value").textContent =
     `${Number($("pitch").value) > 0 ? "+" : ""}${$("pitch").value} st`;
@@ -134,7 +154,12 @@ function updateControls() {
     if ($("mode").value === "remove") duration = state.info.duration - duration;
     duration =
       duration / Number($("speed").value) +
-      ($("effect").value === "echo" ? 0.36 : 0);
+      ($("effect").value === "echo" ? 0.36 : 0) +
+      (Number($("reverb").value) > 0
+        ? $("reverb_room").value === "room"
+          ? 0.65
+          : 1.6
+        : 0);
     $("duration-estimate").textContent =
       `Результат ≈ ${time(Math.max(0, duration), true)}`;
     $("selection-caption").textContent =
@@ -149,15 +174,53 @@ function updateControls() {
     );
     $("selection").style.left = `${left}%`;
     $("selection").style.width = `${right - left}%`;
-    $("selection").hidden = false;
+    $("selection").hidden = left === 0 && right === 100;
+    $("overview-selection").hidden = $("selection").hidden;
+    $("overview-selection").style.left = `${left}%`;
+    $("overview-selection").style.width = `${right - left}%`;
+    drawWave();
+  }
+}
+
+function liveParameters() {
+  return {
+    speed: Number($("speed").value),
+    pitch: Number($("pitch").value),
+    volume: Number($("volume").value),
+    bass: Number($("bass").value),
+    treble: Number($("treble").value),
+    effect: $("effect").value,
+    reverb: Number($("reverb").value),
+    reverb_room: $("reverb_room").value,
+  };
+}
+
+function updatePlayback() {
+  if (state.source === "original") {
+    audio.setParameters(liveParameters());
+    audio.setRange(Number($("start").value), Number($("end").value));
   }
 }
 
 function clearResult() {
-  audio.pause();
+  const playing = !audio.paused;
+  if (state.source === "result" && state.originalBuffer) {
+    const options = state.renderedOptions;
+    let position = audio.currentTime * Number(options.speed);
+    if (options.reverse === "true")
+      position = audio.duration * Number(options.speed) - position;
+    if (options.mode === "keep") position += Number(options.start);
+    else if (position >= Number(options.start))
+      position += Number(options.end) - Number(options.start);
+    setSource("original");
+    audio.currentTime = position;
+    if (playing)
+      audio.play().catch(() => notice("Нажми воспроизведение ещё раз.", true));
+  }
   if (state.resultURL) URL.revokeObjectURL(state.resultURL);
   state.resultURL = null;
-  if (state.originalURL) setSource("original");
+  state.resultBuffer = null;
+  state.renderedOptions = null;
   syncDisabled();
 }
 
@@ -172,12 +235,22 @@ function resetSettings() {
     .forEach((button) => button.classList.remove("active"));
   clearResult();
   updateControls();
+  updatePlayback();
 }
 
 function setSource(source) {
   audio.pause();
   state.source = source;
-  audio.src = source === "original" ? state.originalURL : state.resultURL;
+  audio.setBuffer(
+    source === "original" ? state.originalBuffer : state.resultBuffer,
+  );
+  audio.setParameters(
+    source === "original"
+      ? liveParameters()
+      : { speed: 1, pitch: 0, volume: 1 },
+  );
+  if (source === "original")
+    audio.setRange(Number($("start").value), Number($("end").value));
   $("original-button").classList.toggle("active", source === "original");
   $("result-button").classList.toggle("active", source === "result");
   $("original-button").setAttribute(
@@ -186,28 +259,49 @@ function setSource(source) {
   );
   $("result-button").setAttribute("aria-pressed", String(source === "result"));
   $("playhead").hidden = source === "result";
-  $("current-time").textContent = "0:00.0";
+  $("current-time").textContent = time(audio.currentTime, true);
 }
 
 function drawWave() {
-  const canvas = $("waveform");
-  const box = canvas.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width = box.width * ratio;
-  canvas.height = box.height * ratio;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(ratio, ratio);
   if (!state.info) return;
   const peaks = state.info.waveform;
-  const count = Math.max(1, Math.floor(box.width / 4));
-  const peakMax = Math.max(0.01, ...peaks);
-  ctx.fillStyle = "#b4e66a";
-  for (let i = 0; i < count; i++) {
-    const from = Math.floor((i / count) * peaks.length);
-    const to = Math.max(from + 1, Math.floor(((i + 1) / count) * peaks.length));
-    const value = Math.max(...peaks.slice(from, to)) / peakMax;
-    const height = Math.max(2, value * box.height * 0.82);
-    ctx.fillRect((i * box.width) / count, (box.height - height) / 2, 2, height);
+  const start = Number($("start").value) / state.info.duration;
+  const end = Number($("end").value) / state.info.duration;
+  for (const id of ["waveform", "overview"]) {
+    const canvas = $(id);
+    const box = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = box.width * ratio;
+    canvas.height = box.height * ratio;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(ratio, ratio);
+    const peakMax = Math.max(...peaks, 0.01);
+    const count = Math.min(peaks.length, Math.ceil(box.width * 2));
+    const path = new Path2D();
+    for (let side = 0; side < 2; side++) {
+      for (let k = 0; k < count; k++) {
+        const i = side ? count - 1 - k : k;
+        const value = peaks[Math.floor((i / count) * peaks.length)] / peakMax;
+        const x = (i / (count - 1)) * box.width;
+        const y =
+          box.height / 2 +
+          (side ? 1 : -1) * Math.max(0.6, value * box.height * 0.43);
+        if (!side && !k) path.moveTo(x, y);
+        else path.lineTo(x, y);
+      }
+    }
+    path.closePath();
+    ctx.fillStyle = id === "overview" ? "#4c616e" : "#759866";
+    ctx.fill(path);
+    if (start > 0 || end < 0.9999) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(start * box.width, 0, (end - start) * box.width, box.height);
+      ctx.clip();
+      ctx.fillStyle = "#c6a0f6";
+      ctx.fill(path);
+      ctx.restore();
+    }
   }
 }
 
@@ -257,7 +351,20 @@ async function loadFile(file) {
     );
     const info = await response.json();
     if (sequence !== state.sequence) return;
+    let buffer;
+    try {
+      buffer = await audio.decode(await file.arrayBuffer());
+    } catch {
+      const fallback = await requestAudio(
+        "convert",
+        new URLSearchParams({ format: "wav" }),
+        file,
+        state.controller.signal,
+      );
+      buffer = await audio.decode(await fallback.arrayBuffer());
+    }
     audio.pause();
+    state.originalBuffer = buffer;
     if (state.originalURL) URL.revokeObjectURL(state.originalURL);
     state.file = file;
     state.info = info;
@@ -273,6 +380,11 @@ async function loadFile(file) {
     $("meta-rms").textContent =
       info.rms_db === null ? "−∞ dBFS" : `${info.rms_db} dBFS`;
     $("file-card").hidden = false;
+    $("dropzone").hidden = true;
+    $("replace-button").hidden = false;
+    $("demo-block").hidden = true;
+    $("format-list").hidden = true;
+    document.body.classList.add("has-track");
     $("metadata").hidden = false;
     $("wave-empty").hidden = true;
     $("start").max = info.duration;
@@ -286,8 +398,9 @@ async function loadFile(file) {
       }),
     );
     resetSettings();
+    setSource("original");
     drawWave();
-    notice("Трек загружен. Выдели фрагмент или начни со звучания.");
+    $("status-message").hidden = true;
   } catch (error) {
     if (error.name !== "AbortError") notice(error.message, true);
   } finally {
@@ -303,6 +416,7 @@ function getOptions(format) {
   const options = {
     format,
     mode: $("mode").value,
+    reverb_room: $("reverb_room").value,
     effect: $("effect").value,
     reverse: $("reverse").checked,
     normalize: $("normalize").checked,
@@ -368,6 +482,8 @@ async function renderAudio(download) {
       notice("Готово! Трек отправлен в загрузки.");
     } else {
       if (state.resultURL) URL.revokeObjectURL(state.resultURL);
+      state.resultBuffer = await audio.decode(await blob.arrayBuffer());
+      state.renderedOptions = Object.fromEntries(params);
       state.resultURL = URL.createObjectURL(blob);
       setSource("result");
       notice("Результат готов. Сравни его с оригиналом.");
@@ -441,6 +557,10 @@ function demoFile() {
   return new File([buffer], "midnight-loop.wav", { type: "audio/wav" });
 }
 
+$("replace-button").addEventListener("click", () => $("file-input").click());
+audio.addEventListener("error", () =>
+  notice("Не удалось продолжить воспроизведение.", true),
+);
 $("file-input").addEventListener("change", (event) =>
   loadFile(event.target.files[0]),
 );
@@ -464,12 +584,16 @@ $("settings-form").addEventListener("submit", (event) =>
   event.preventDefault(),
 );
 $("settings-form").addEventListener("input", (event) => {
-  clearResult();
+  if (
+    !["format", "bitrate", "channels", "sample_rate"].includes(event.target.id)
+  )
+    clearResult();
   if (effectFields.includes(event.target.id))
     document
       .querySelectorAll(".preset")
       .forEach((button) => button.classList.remove("active"));
   updateControls();
+  updatePlayback();
 });
 $("reset-button").addEventListener("click", resetSettings);
 $("select-all").addEventListener("click", () => {
@@ -477,6 +601,7 @@ $("select-all").addEventListener("click", () => {
   $("end").value = state.info.duration;
   clearResult();
   updateControls();
+  updatePlayback();
 });
 $("preview-button").addEventListener("click", () => renderAudio(false));
 $("export-button").addEventListener("click", () => renderAudio(true));
@@ -485,12 +610,11 @@ $("result-button").addEventListener("click", () => setSource("result"));
 $("play-button").addEventListener("click", async () => {
   if (!audio.paused) return audio.pause();
   try {
+    getOptions("wav");
+    updatePlayback();
     await audio.play();
   } catch {
-    notice(
-      "Браузер не воспроизводит этот формат. Нажми «Применить и слушать» — подготовим WAV.",
-      true,
-    );
+    notice("Не удалось начать воспроизведение. Попробуй ещё раз.", true);
   }
 });
 audio.addEventListener("play", () => {
@@ -504,7 +628,17 @@ audio.addEventListener("pause", () => {
 audio.addEventListener("loadedmetadata", () => {
   $("total-time").textContent = time(audio.duration, true);
 });
+$("seek").addEventListener("input", () => {
+  audio.currentTime =
+    audio.start + (Number($("seek").value) / 1000) * (audio.end - audio.start);
+});
+$("restart-button").addEventListener("click", () => {
+  audio.currentTime = audio.start;
+});
 audio.addEventListener("timeupdate", () => {
+  $("seek").value =
+    ((audio.currentTime - audio.start) / (audio.end - audio.start || 1)) * 1000;
+  paintRange($("seek"));
   $("current-time").textContent = time(audio.currentTime, true);
   if (state.info && state.source === "original") {
     $("playhead").hidden = false;
@@ -544,9 +678,21 @@ for (const button of tabs) {
 for (const button of document.querySelectorAll("[data-preset]"))
   button.addEventListener("click", () => {
     const preset = {
-      clean: { bass: 0, treble: 0, effect: "none", normalize: true },
-      warm: { bass: 5, treble: -2, effect: "none", normalize: false },
-      lofi: { bass: 2, treble: -5, effect: "lofi", normalize: false },
+      clean: { bass: 0, treble: 0, effect: "none", normalize: true, reverb: 0 },
+      warm: {
+        bass: 5,
+        treble: -2,
+        effect: "none",
+        normalize: false,
+        reverb: 0,
+      },
+      lofi: {
+        bass: 2,
+        treble: -5,
+        effect: "lofi",
+        normalize: false,
+        reverb: 0,
+      },
     }[button.dataset.preset];
     for (const [id, value] of Object.entries(preset)) {
       if (typeof value === "boolean") $(id).checked = value;
@@ -557,6 +703,7 @@ for (const button of document.querySelectorAll("[data-preset]"))
       .forEach((item) => item.classList.toggle("active", item === button));
     clearResult();
     updateControls();
+    updatePlayback();
   });
 
 let drag = null;
@@ -572,13 +719,25 @@ const wavePosition = (event) =>
 $("wave-area").addEventListener("pointerdown", (event) => {
   if (!state.info || state.busy || event.button !== 0) return;
   const point = wavePosition(event);
-  drag = { start: point, x: event.clientX, moved: false };
+  const width = $("wave-area").getBoundingClientRect().width;
+  const start = Number($("start").value) / state.info.duration;
+  const end = Number($("end").value) / state.info.duration;
+  const anchor =
+    !$("selection").hidden && Math.abs(point - start) * width < 9
+      ? end
+      : !$("selection").hidden && Math.abs(point - end) * width < 9
+        ? start
+        : point;
+  drag = { start: anchor, x: event.clientX, moved: false };
   $("wave-area").setPointerCapture(event.pointerId);
 });
 $("wave-area").addEventListener("pointermove", (event) => {
   if (!drag) return;
   if (Math.abs(event.clientX - drag.x) < 4 && !drag.moved) return;
-  if (!drag.moved) clearResult();
+  if (!drag.moved) {
+    audio.pause();
+    clearResult();
+  }
   drag.moved = true;
   const point = wavePosition(event);
   $("start").value = (
@@ -599,6 +758,7 @@ $("wave-area").addEventListener("pointerup", (event) => {
     if (state.source !== "original") setSource("original");
     audio.currentTime = wavePosition(event) * state.info.duration;
   }
+  updatePlayback();
   drag = null;
 });
 $("wave-area").addEventListener("pointercancel", () => {

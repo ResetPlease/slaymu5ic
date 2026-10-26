@@ -39,6 +39,8 @@ jobs:
         run: |
           .venv/bin/ruff check .
           .venv/bin/ruff format --check .
+          npm run vendor
+          git diff --exit-code -- static/vendor static/fonts
           npm run check
           git diff --check
           python deploy/check_repository.py
@@ -47,7 +49,7 @@ jobs:
       - name: Test browser workflows
         run: npm run test:e2e
       - name: Package application
-        run: git archive --format=tar.gz --output=slaymusic.tar.gz HEAD app_final.py slaymusic static requirements.txt requirements-dev.txt requirements.in requirements-dev.in pyproject.toml test_app.py tests package.json package-lock.json playwright.config.js deploy README.md .env.example
+        run: git archive --format=tar.gz --output=slaymusic.tar.gz HEAD app_final.py slaymusic static requirements.txt requirements-dev.txt requirements.in requirements-dev.in pyproject.toml test_app.py tests package.json package-lock.json playwright.config.js deploy scripts README.md THIRD_PARTY.md .env.example
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:

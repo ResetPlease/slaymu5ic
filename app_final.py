@@ -74,16 +74,20 @@ def create_app(settings: Settings | None = None):
     async def audio_info(request: Request):
         data = await read_audio(request, settings)
         audio = await decode(data, settings)
-        return await asyncio.to_thread(audio.info, len(data))
+        input_size = len(data)
+        del data
+        return await asyncio.to_thread(audio.info, input_size)
 
     async def transform(request: Request, options: Annotated[Options, Query()]):
         data = await read_audio(request, settings)
         audio = await decode(data, settings)
+        input_size = len(data)
+        del data
         output = await process_audio(audio, options, settings)
         logger.info(
             "audio_processed format=%s input_bytes=%d output_bytes=%d",
             options.format,
-            len(data),
+            input_size,
             len(output),
         )
         return Response(

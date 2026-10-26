@@ -1,6 +1,8 @@
 import asyncio
 import io
 import math
+import shutil
+import sys
 import wave
 from dataclasses import dataclass
 from typing import Literal
@@ -36,7 +38,9 @@ class Options(BaseModel):
     fade_out: float = Field(default=0, ge=0, le=30)
     bass: float = Field(default=0, ge=-12, le=12)
     treble: float = Field(default=0, ge=-12, le=12)
-    effect: Literal["none", "echo", "telephone", "lofi"] = "none"
+    effect: Literal["none", "echo", "telephone", "lofi", "distortion", "tremolo"] = "none"
+    reverb: float = Field(default=0, ge=0, le=0.75)
+    reverb_room: Literal["room", "hall"] = "hall"
     reverse: bool = False
     normalize: bool = False
     sample_rate: Literal[22050, 44100, 48000] = 44100
@@ -82,9 +86,9 @@ class Audio:
         peaks = [
             round(float(np.max(np.abs(block.astype(np.int32)))) / 32768, 4) for block in blocks
         ]
-        signal = samples.astype(np.float32) / 32768
-        rms = float(np.sqrt(np.mean(signal * signal)))
-        peak = float(np.max(np.abs(signal)))
+        power = np.einsum("ij,ij->", samples, samples, dtype=np.float64)
+        rms = float(np.sqrt(power / samples.size)) / 32768
+        peak = max(abs(int(samples.min())), abs(int(samples.max()))) / 32768
         return {
             "duration": round(self.duration, 4),
             "sample_rate": RATE,
@@ -98,18 +102,29 @@ class Audio:
 
 
 async def run_ffmpeg(data: bytes, args: list[str], settings: Settings, limit: int):
+    if shutil.which(settings.ffmpeg_binary) is None:
+        raise HTTPException(503, "Аудиодвижок недоступен. Попробуйте позже.")
     try:
         process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "slaymusic.worker",
+            str(settings.ffmpeg_memory_mb),
+            str(settings.process_timeout_seconds),
             settings.ffmpeg_binary,
             "-hide_banner",
             "-loglevel",
             "error",
             "-nostdin",
+            "-max_alloc",
+            "33554432",
             "-threads",
             "1",
             "-filter_threads",
             "1",
             *args,
+            "-threads",
+            "1",
             "pipe:1",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
@@ -129,14 +144,14 @@ async def run_ffmpeg(data: bytes, args: list[str], settings: Settings, limit: in
             process.stdin.close()
 
     async def read_output():
-        result = bytearray()
+        result = io.BytesIO()
         while chunk := await process.stdout.read(65536):
-            if len(result) + len(chunk) > limit:
+            if result.tell() + len(chunk) > limit:
                 raise HTTPException(
                     413, "Аудио превышает допустимую длительность или размер результата."
                 )
-            result.extend(chunk)
-        return bytes(result)
+            result.write(chunk)
+        return result.getvalue()
 
     async def drain_errors():
         while await process.stderr.read(65536):
@@ -245,6 +260,10 @@ def filters(options: Options, duration: float):
         chain.extend(["highpass=f=400", "lowpass=f=3400"])
     elif options.effect == "lofi":
         chain.extend(["lowpass=f=3500", "acrusher=bits=8:mix=0.6"])
+    elif options.effect == "distortion":
+        chain.append("asoftclip=type=tanh:threshold=0.4:output=0.7:oversample=2")
+    elif options.effect == "tremolo":
+        chain.append("tremolo=f=5:d=0.6")
     if options.normalize:
         chain.append("loudnorm=I=-16:TP=-1.5:LRA=11")
     if options.volume != 1:
@@ -276,7 +295,28 @@ async def process_audio(audio: Audio, options: Options, settings: Settings):
         "-i",
         "pipe:0",
     ]
-    if chain:
+    if options.reverb:
+        tail = 0.65 if options.reverb_room == "room" else 1.6
+        impulses = []
+        impulse_gain = 0.0
+        positions = np.arange(round(tail * RATE), dtype=np.float64)
+        for seed in (1, 101):
+            values = np.sin((positions + seed) * 12.9898) * 43758.5453
+            impulse = (
+                0.018 * (2 * (values - np.floor(values)) - 1) * np.exp(-5 * positions / RATE / tail)
+            )
+            impulse_gain = max(impulse_gain, float(np.abs(impulse).sum()))
+            noise = f"sin((n+{seed})*12.9898)*43758.5453"
+            impulses.append(f"0.018*(2*({noise}-floor({noise}))-1)*exp(-5*t/{tail})")
+        graph = (
+            f"[0:a]{','.join(chain) or 'anull'},aresample={RATE},apad=pad_dur={tail},asplit=2[dry][send];"
+            f"aevalsrc='{'|'.join(impulses)}':s={RATE}:d={tail},atrim=duration={tail}[ir];"
+            f"[send][ir]afir=dry=1:wet=1:maxir=2:precision=float,volume={impulse_gain}[wet];"
+            f"[dry][wet]amix=inputs=2:weights='{1 - options.reverb} {options.reverb}':"
+            "normalize=0:duration=first[out]"
+        )
+        args += ["-filter_complex_threads", "1", "-filter_complex", graph, "-map", "[out]"]
+    elif chain:
         args += ["-af", ",".join(chain)]
     args += ["-map_metadata", "-1", "-ar", str(options.sample_rate), "-ac", str(options.channels)]
     if options.format in ("mp3", "ogg", "aac"):
@@ -287,7 +327,7 @@ async def process_audio(audio: Audio, options: Options, settings: Settings):
         else FORMATS[options.format][1]
     )
     result = await run_ffmpeg(
-        selected.pcm, args, settings, (settings.max_duration_seconds * 2 + 2) * 48000 * FRAME_BYTES
+        selected.pcm, args, settings, (settings.max_duration_seconds * 2 + 4) * 48000 * FRAME_BYTES
     )
     if options.format == "wav":
         buffer = io.BytesIO()
