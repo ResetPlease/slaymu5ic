@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111413" />
+    <meta
+      name="description"
+      content="Slaymusic — аудиоредактор в браузере. Обрезайте, меняйте звучание и конвертируйте музыку без регистрации."
+    />
+    <title>Slaymusic — твой звук, твои правила</title>
+    <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="static/style.css" />
+    <script src="static/app.js" defer></script>
+  </head>
+  <body>
+    <svg
+      class="icon-defs"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <symbol id="i-wave" viewBox="0 0 24 24">
+          <path d="M3 10v4m4-8v12m5-16v20m5-16v12m4-8v4" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24">
+          <path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5" />
+        </symbol>
+        <symbol id="i-play" viewBox="0 0 24 24">
+          <path d="m8 5 11 7-11 7Z" />
+        </symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24">
+          <path d="M8 5v14m8-14v14" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4" />
+        </symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24">
+          <path
+            d="M5 3v8m0 4v6m7-18v3m0 4v11m7-18v12m0 4v2M2 11h6m1-5h6m1 9h6"
+          />
+        </symbol>
+        <symbol id="i-cut" viewBox="0 0 24 24">
+          <circle cx="5" cy="6" r="3" />
+          <circle cx="5" cy="18" r="3" />
+          <path d="m7.5 7.5 13 13m-13-4 13-13" />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z" />
+        </symbol>
+        <symbol id="i-reset" viewBox="0 0 24 24">
+          <path d="M3 10a9 9 0 1 1 2 8M3 3v7h7" />
+        </symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm-4 9 3 3 5-6" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M5 12h14m-6-6 6 6-6 6" />
+        </symbol>
+      </defs>
+    </svg>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Slaymusic, главная"
+        ><span class="brand-mark"
+          ><svg><use href="#i-wave" /></svg></span
+        >slaymusic<span class="brand-dot">.</span></a
+      >
+      <nav aria-label="Главная навигация">
+        <span class="nav-active">Студия</span
+        ><a href="docs" target="_blank" rel="noopener"
+          >API <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+      <div class="local-badge">
+        <span class="status-dot"></span>Без регистрации
+      </div>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">ОНЛАЙН АУДИОРЕДАКТОР</p>
+          <h1>Твой звук. <span>Твои правила.</span></h1>
+          <p class="intro-copy">
+            Обрезай, экспериментируй со звучанием и сохраняй в нужном формате.
+          </p>
+        </div>
+        <span class="studio-label">SOUND GOOD.<br />MAKE IT YOURS.</span>
+      </section>
+      <div class="workspace">
+        <aside class="library panel">
+          <div class="panel-title">
+            <h2>Исходный трек</h2>
+            <span class="tiny-label">01</span>
+          </div>
+          <label class="dropzone" id="dropzone" for="file-input"
+            ><svg><use href="#i-upload" /></svg
+            ><strong>Загрузи свой звук</strong
+            ><span>Перетащи файл сюда<br />или <u>выбери на устройстве</u></span
+            ><small id="upload-limit">До 30 МБ · до 5 минут</small></label
+          >
+          <input
+            id="file-input"
+            class="visually-hidden"
+            type="file"
+            accept=".wav,.mp3,.flac,.ogg,.aac,audio/wav,audio/mpeg,audio/flac,audio/ogg,audio/aac"
+            aria-label="Загрузить аудиофайл"
+          />
+          <div class="format-list" aria-label="Поддерживаемые форматы">
+            <span>WAV</span><span>MP3</span><span>FLAC</span><span>OGG</span
+            ><span>AAC</span>
+          </div>
+          <div class="file-card" id="file-card" hidden>
+            <span class="file-icon"
+              ><svg><use href="#i-wave" /></svg
+            ></span>
+            <div>
+              <strong id="file-name"></strong><small id="file-size"></small>
+            </div>
+          </div>
+          <dl class="metadata" id="metadata" hidden>
+            <div>
+              <dt>Длительность</dt>
+              <dd id="meta-duration">—</dd>
+            </div>
+            <div>
+              <dt>Пиковый уровень</dt>
+              <dd id="meta-peak">—</dd>
+            </div>
+            <div>
+              <dt>Средний уровень</dt>
+              <dd id="meta-rms">—</dd>
+            </div>
+            <div>
+              <dt>Обработка</dt>
+              <dd>44,1 кГц · стерео</dd>
+            </div>
+          </dl>
+          <div class="demo-block">
+            <span class="eyebrow">ПОКА НЕТ ФАЙЛА?</span
+            ><button id="demo-button" class="text-button">
+              Попробовать демотрек <svg><use href="#i-arrow" /></svg>
+            </button>
+            <p>
+              Небольшой синтезаторный луп.<br />Можно сразу начать
+              редактировать.
+            </p>
+          </div>
+          <div class="library-bottom">
+            <span class="small-dot"></span>Без установки. Просто звук.
+          </div>
+        </aside>
+        <section class="editor panel" aria-label="Редактор аудио">
+          <div class="editor-heading">
+            <div>
+              <span class="eyebrow">РАБОЧАЯ ОБЛАСТЬ</span>
+              <h2 id="track-title">Начни с одного трека</h2>
+            </div>
+            <span id="track-status" class="tag">НЕТ АУДИО</span>
+          </div>
+          <div class="timeline-wrap">
+            <div class="timeline-top">
+              <span><span class="small-dot"></span> АУДИОДОРОЖКА</span
+              ><span id="selection-caption">Выдели фрагмент на волне</span>
+            </div>
+            <div id="wave-area" class="wave-area">
+              <canvas
+                id="waveform"
+                aria-label="Осциллограмма. Для точного выделения используйте поля начала и конца ниже."
+              ></canvas>
+              <div id="wave-empty">
+                <svg><use href="#i-wave" /></svg
+                ><span>Здесь появится твоя звуковая волна</span>
+              </div>
+              <div id="selection" class="selection" hidden>
+                <span class="handle handle-left"></span
+                ><span class="handle handle-right"></span>
+              </div>
+              <div id="playhead" class="playhead" hidden></div>
+            </div>
+            <div id="ruler" class="ruler">
+              <span>0:00</span><span>0:00</span><span>0:00</span
+              ><span>0:00</span><span>0:00</span>
+            </div>
+          </div>
+          <div class="transport">
+            <div class="transport-left">
+              <button
+                id="play-button"
+                class="play-button"
+                aria-label="Воспроизвести"
+                disabled
+              >
+                <svg><use href="#i-play" /></svg></button
+              ><span class="timecode"
+                ><b id="current-time">0:00.0</b><span>/</span
+                ><span id="total-time">0:00.0</span></span
+              >
+            </div>
+            <div
+              class="source-switch"
+              role="group"
+              aria-label="Источник прослушивания"
+            >
+              <button id="original-button" class="active" disabled>
+                Оригинал</button
+              ><button id="result-button" disabled>Результат</button>
+            </div>
+          </div>
+          <div class="tabs" role="tablist" aria-label="Настройки">
+            <button
+              id="tab-edit"
+              class="active"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-edit"
+              data-tab="edit"
+            >
+              <svg><use href="#i-cut" /></svg>Редактор</button
+            ><button
+              id="tab-effects"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-effects"
+              tabindex="-1"
+              data-tab="effects"
+            >
+              <svg><use href="#i-sliders" /></svg>Эффекты</button
+            ><button
+              id="tab-export"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-export"
+              tabindex="-1"
+              data-tab="export"
+            >
+              <svg><use href="#i-download" /></svg>Экспорт
+            </button>
+          </div>
+          <form id="settings-form">
+            <fieldset id="controls" disabled>
+              <section
+                id="panel-edit"
+                role="tabpanel"
+                aria-labelledby="tab-edit"
+              >
+                <div class="section-heading">
+                  <h3>Выбери нужный фрагмент</h3>
+                  <button type="button" id="select-all" class="quiet-button">
+                    Весь трек
+                  </button>
+                </div>
+                <div class="trim-row">
+                  <label
+                    >Начало, сек<input
+                      id="start"
+                      name="start"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value="0" /></label
+                  ><span class="trim-dash">—</span
+                  ><label
+                    >Конец, сек<input
+                      id="end"
+                      name="end"
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value="0.01" /></label
+                  ><label class="mode-field"
+                    >Что сделать<select id="mode" name="mode">
+                      <option value="keep">Оставить фрагмент</option>
+                      <option value="remove">Удалить фрагмент</option>
+                    </select></label
+                  >
+                </div>
+                <div class="divider"></div>
+                <div class="slider-grid">
+                  <label class="slider-control"
+                    ><span
+                      >Скорость<output for="speed" id="speed-value"
+                        >1.00×</output
+                      ></span
+                    ><input
+                      id="speed"
+                      name="speed"
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.05"
+                      value="1"
+                    /><small
+                      ><span>0.5×</span><span>Без изменения тона</span
+                      ><span>2×</span></small
+                    ></label
+                  >
+                  <label class="slider-control"
+                    ><span
+                      >Тональность<output for="pitch" id="pitch-value"
+                        >0 st</output
+                      ></span
+                    ><input
+                      id="pitch"
+                      name="pitch"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      step="1"
+                      value="0"
+                    /><small
+                      ><span>−12 st</span><span>Без изменения темпа</span
+                      ><span>+12 st</span></small
+                    ></label
+                  >
+                  <label class="slider-control"
+                    ><span
+                      >Громкость<output for="volume" id="volume-value"
+                        >100%</output
+                      ></span
+                    ><input
+                      id="volume"
+                      name="volume"
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value="1"
+                    /><small
+                      ><span>0%</span><span>Усиление сигнала</span
+                      ><span>200%</span></small
+                    ></label
+                  >
+                </div>
+                <div class="fade-row">
+                  <label
+                    >Плавное начало, сек<input
+                      id="fade_in"
+                      name="fade_in"
+                      type="number"
+                      min="0"
+                      max="30"
+                      step="0.1"
+                      value="0" /></label
+                  ><label
+                    >Плавное затухание, сек<input
+                      id="fade_out"
+                      name="fade_out"
+                      type="number"
+                      min="0"
+                      max="30"
+                      step="0.1"
+                      value="0" /></label
+                  ><label class="check-control"
+                    ><input id="reverse" name="reverse" type="checkbox" /><span
+                      >Задом наперёд</span
+                    ></label
+                  >
+                </div>
+              </section>
+              <section
+                id="panel-effects"
+                role="tabpanel"
+                aria-labelledby="tab-effects"
+                hidden
+              >
+                <div class="section-heading">
+                  <h3>Найди своё звучание</h3>
+                  <span class="muted">Всё можно сбросить</span>
+                </div>
+                <div class="presets" role="group" aria-label="Пресеты">
+                  <button type="button" data-preset="clean" class="preset">
+                    <span>01 / CLEAN</span><strong>Чистый звук</strong
+                    ><small>Ровная громкость</small></button
+                  ><button type="button" data-preset="warm" class="preset">
+                    <span>02 / WARM</span><strong>Теплее</strong
+                    ><small>Больше низких частот</small></button
+                  ><button type="button" data-preset="lofi" class="preset">
+                    <span>03 / LO-FI</span><strong>На кассете</strong
+                    ><small>Мягкость и текстура</small>
+                  </button>
+                </div>
+                <div class="slider-grid two">
+                  <label class="slider-control"
+                    ><span
+                      >Низкие частоты<output for="bass" id="bass-value"
+                        >0 dB</output
+                      ></span
+                    ><input
+                      id="bass"
+                      name="bass"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value="0"
+                    /><small
+                      ><span>−12 dB</span><span>+12 dB</span></small
+                    ></label
+                  ><label class="slider-control"
+                    ><span
+                      >Высокие частоты<output for="treble" id="treble-value"
+                        >0 dB</output
+                      ></span
+                    ><input
+                      id="treble"
+                      name="treble"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value="0"
+                    /><small
+                      ><span>−12 dB</span><span>+12 dB</span></small
+                    ></label
+                  >
+                </div>
+                <div class="effect-row">
+                  <label
+                    >Эффект<select id="effect" name="effect">
+                      <option value="none">Без эффекта</option>
+                      <option value="echo">Эхо</option>
+                      <option value="telephone">Телефон</option>
+                      <option value="lofi">Lo-fi</option>
+                    </select></label
+                  ><label class="check-control"
+                    ><input
+                      id="normalize"
+                      name="normalize"
+                      type="checkbox"
+                    /><span>Нормализация громкости</span></label
+                  >
+                </div>
+              </section>
+              <section
+                id="panel-export"
+                role="tabpanel"
+                aria-labelledby="tab-export"
+                hidden
+              >
+                <div class="section-heading">
+                  <h3>Финальные штрихи</h3>
+                  <span class="muted">Твой трек готов к выходу</span>
+                </div>
+                <div class="export-grid">
+                  <label
+                    >Формат<select id="format" name="format">
+                      <option value="mp3">MP3 — компактный</option>
+                      <option value="wav">WAV — без сжатия</option>
+                      <option value="flac">FLAC — без потерь</option>
+                      <option value="ogg">OGG — Vorbis</option>
+                      <option value="aac">AAC — ADTS</option>
+                    </select></label
+                  ><label
+                    >Битрейт<select id="bitrate" name="bitrate">
+                      <option value="96">96 кбит/с</option>
+                      <option value="128">128 кбит/с</option>
+                      <option value="192" selected>192 кбит/с</option>
+                      <option value="256">256 кбит/с</option>
+                      <option value="320">320 кбит/с</option>
+                    </select></label
+                  ><label
+                    >Частота дискретизации<select
+                      id="sample_rate"
+                      name="sample_rate"
+                    >
+                      <option value="22050">22 050 Гц</option>
+                      <option value="44100" selected>44 100 Гц</option>
+                      <option value="48000">48 000 Гц</option>
+                    </select></label
+                  ><label
+                    >Каналы<select id="channels" name="channels">
+                      <option value="2">Стерео</option>
+                      <option value="1">Моно</option>
+                    </select></label
+                  >
+                </div>
+                <p class="export-note">
+                  <svg><use href="#i-shield" /></svg>Результат скачивается на
+                  твоё устройство. На сервере копия не остаётся.
+                </p>
+              </section>
+            </fieldset>
+          </form>
+          <div class="editor-footer">
+            <button id="reset-button" class="quiet-button" disabled>
+              <svg><use href="#i-reset" /></svg>Сбросить настройки</button
+            ><span id="duration-estimate">Создай что-нибудь своё</span
+            ><button id="preview-button" class="secondary-button" disabled>
+              <svg><use href="#i-play" /></svg>Применить и слушать
+            </button>
+          </div>
+        </section>
+      </div>
+      <section class="export-bar">
+        <div>
+          <span class="export-icon"
+            ><svg><use href="#i-spark" /></svg
+          ></span>
+          <div>
+            <h2>Звучит как надо?</h2>
+            <p id="export-summary">MP3 · 192 кбит/с · 44,1 кГц · стерео</p>
+          </div>
+        </div>
+        <button id="export-button" class="primary-button" disabled>
+          Скачать трек <svg><use href="#i-download" /></svg>
+        </button>
+      </section>
+      <div
+        id="status-message"
+        class="status-message"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></div>
+      <footer class="site-footer">
+        <span>slaymusic. <span class="muted">Сделай погромче.</span></span>
+        <p>
+          <svg><use href="#i-shield" /></svg>Файлы обрабатываются в оперативной
+          памяти и не сохраняются на сервере.
+        </p>
+        <span class="muted">v1.0</span>
+      </footer>
+    </main>
+  </body>
+</html>
