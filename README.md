@@ -1,9 +1,6 @@
 # Slaymusic
 
-[![CI](https://github.com/ResetPlease/slaymu5ic/actions/workflows/ci.yml/badge.svg)](https://github.com/ResetPlease/slaymu5ic/actions/workflows/ci.yml)
-[![Coverage gate ≥90%](https://img.shields.io/badge/coverage_gate-%E2%89%A590%25-a3e635)](.github/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![FFmpeg](https://img.shields.io/badge/audio-FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![CI](https://github.com/ResetPlease/slaymu5ic/actions/workflows/ci.yml/badge.svg)](https://github.com/ResetPlease/slaymu5ic/actions/workflows/ci.yml) [![Coverage gate ≥90%](https://img.shields.io/badge/coverage_gate-%E2%89%A590%25-a3e635)](.github/workflows/ci.yml) [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/) [![FFmpeg](https://img.shields.io/badge/audio-FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 
 Браузерный аудиоредактор: загрузить дорожку, выделить фрагмент, изменить звучание и скачать результат. Без регистрации и сохранения аудиофайлов на сервере. Для знакомства есть синтезаторный демотрек.
 
