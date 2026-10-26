@@ -11,6 +11,8 @@ EnvironmentFile=/etc/slaymusic.env
 EnvironmentFile=-/opt/slaymusic/current/release.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=OMP_NUM_THREADS=1
 ExecStart=/opt/slaymusic/current/.venv/bin/python -m uvicorn app_final:app --host 127.0.0.1 --port 8093 --workers 1 --no-access-log --timeout-keep-alive 5 --limit-concurrency 24
 Restart=on-failure
 RestartSec=3
@@ -19,6 +21,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+ReadOnlyPaths=/tmp /var/tmp
 PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
@@ -27,7 +30,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
-MemoryMax=768M
+MemoryMax=1G
 MemorySwapMax=0
 CPUQuota=150%
 TasksMax=32
