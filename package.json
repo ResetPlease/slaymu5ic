@@ -1,0 +1,13 @@
+{
+  "name": "slaymusic",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "check": "node --check static/app.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "prettier": "^3.9.10"
+  }
+}

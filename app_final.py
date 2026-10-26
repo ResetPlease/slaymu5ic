@@ -58,7 +58,7 @@ def create_app(settings: Settings | None = None):
             "max_upload_mb": settings.max_upload_mb,
             "max_duration_seconds": settings.max_duration_seconds,
             "sample_rates": [22050, 44100, 48000],
-            "bitrates": [96, 128, 192, 256, 320],
+            "bitrates": [64, 96, 128, 192, 256, 320],
         }
 
     audio_body = {

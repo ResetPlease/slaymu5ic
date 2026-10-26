@@ -7,7 +7,7 @@ from typing import Literal
 
 import numpy as np
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from slaymusic.config import Settings
 
@@ -41,7 +41,7 @@ class Options(BaseModel):
     normalize: bool = False
     sample_rate: Literal[22050, 44100, 48000] = 44100
     channels: Literal[1, 2] = 2
-    bitrate: Literal[96, 128, 192, 256, 320] = 192
+    bitrate: Literal[64, 96, 128, 192, 256, 320] = 192
 
     @field_validator("sample_rate", "channels", "bitrate", mode="before")
     @classmethod
@@ -49,6 +49,23 @@ class Options(BaseModel):
         return (
             int(value) if isinstance(value, str) and value.isascii() and value.isdigit() else value
         )
+
+    @model_validator(mode="after")
+    def validate_bitrate(self):
+        maximum = 320
+        if self.format == "ogg":
+            maximum = (
+                (64 if self.channels == 1 else 128)
+                if self.sample_rate == 22050
+                else (192 if self.channels == 1 else 320)
+            )
+        elif self.format == "mp3" and self.sample_rate == 22050:
+            maximum = 128
+        if self.bitrate > maximum:
+            raise ValueError(
+                f"Для этого формата, частоты и числа каналов выберите битрейт не выше {maximum} кбит/с."
+            )
+        return self
 
 
 @dataclass

@@ -104,6 +104,25 @@ function updateControls() {
       `${Number($(id).value) > 0 ? "+" : ""}${$(id).value} dB`;
   const format = $("format").value;
   const lossless = ["wav", "flac"].includes(format);
+  const lowRate = $("sample_rate").value === "22050";
+  const mono = $("channels").value === "1";
+  const maxBitrate =
+    format === "ogg"
+      ? lowRate
+        ? mono
+          ? 64
+          : 128
+        : mono
+          ? 192
+          : 320
+      : format === "mp3" && lowRate
+        ? 128
+        : 320;
+  for (const option of $("bitrate").options)
+    option.disabled = Number(option.value) > maxBitrate;
+  if (Number($("bitrate").value) > maxBitrate)
+    $("bitrate").value = String(maxBitrate);
+
   $("bitrate").disabled = lossless;
   $("export-summary").textContent =
     `${format.toUpperCase()} · ${lossless ? "без потерь" : `${$("bitrate").value} кбит/с`} · ${(Number($("sample_rate").value) / 1000).toLocaleString("ru")} кГц · ${$("channels").value === "1" ? "моно" : "стерео"}`;
