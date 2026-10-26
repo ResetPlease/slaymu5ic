@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Slaymusic releases every two minutes
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=120
+RandomizedDelaySec=15
+Persistent=true
+
+[Install]
+WantedBy=timers.target
